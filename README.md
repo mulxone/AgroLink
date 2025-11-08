@@ -10,3 +10,11 @@ npx expo start
 - npm run ios
     npx expo start --tunnel
 - npm run web
+
+must do when you clone:
+npm install
+npm install @react-navigation/native
+npm install @react-navigation/native-stack
+npm install --save-dev @types/react @types/react-native
+npm install @supabase/supabase-js
+npm install --save-dev @types/react @types/react-native
