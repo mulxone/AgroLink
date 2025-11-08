@@ -1,4 +1,4 @@
-// app/(tabs)/listings/index.tsx
+
 import { useEffect, useState } from 'react';
 import { View, Text, FlatList, Image, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { supabase } from '../../../lib/supabase';
@@ -10,14 +10,12 @@ export type RootStackParamList = {
   Login: undefined;
   Signup: undefined;
   Home: undefined;
-  ListingDetail: { id: string };
+  CreateListing: undefined;
+  ListingDetails: { id: string };
 };
 
 // Type the navigation
-type ListingsFeedNavigationProp = NativeStackNavigationProp<
-  RootStackParamList,
-  'Home'
->;
+type ListingsFeedNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 
 // Categories
 const categories = ['Produce', 'Tools', 'Seeds', 'Fertilizers', 'Equipment'];
@@ -29,8 +27,8 @@ interface Listing {
   category: string;
   price: number;
   unit: string;
-  images: string[];
-  phone: string;
+  images?: string[]; // images can be optional
+  phone?: string;
 }
 
 export default function ListingsFeed() {
@@ -46,26 +44,30 @@ export default function ListingsFeed() {
 
   const fetchListings = async () => {
     setLoading(true);
-    let query = supabase.from('listings').select('*').eq('status', 'active');
 
-    if (selectedCategory) {
-      query = query.eq('category', selectedCategory);
+    try {
+      let query = supabase.from('listings').select('*').eq('status', 'active');
+      if (selectedCategory) {
+        query = query.eq('category', selectedCategory);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
+      if (error) console.log('Error fetching listings:', error);
+      else setListings(data as Listing[]);
+
+    } catch (error) {
+      console.log('Fetch listings error:', error);
+    } finally {
+      setLoading(false);
     }
-
-    const { data, error } = await query.order('created_at', { ascending: false });
-
-    if (error) console.log('Error fetching listings:', error);
-    else setListings(data as Listing[]);
-
-    setLoading(false);
   };
 
   const renderListing = ({ item }: { item: Listing }) => (
     <TouchableOpacity
       style={styles.card}
-      onPress={() => navigation.navigate('ListingDetail', { id: item.id })}
+      onPress={() => navigation.navigate('ListingDetails', { id: item.id })}
     >
-      {item.images?.length > 0 && (
+      {item.images && item.images.length > 0 && (
         <Image source={{ uri: item.images[0] }} style={styles.cardImage} />
       )}
       <View style={styles.cardContent}>
@@ -73,6 +75,7 @@ export default function ListingsFeed() {
         <Text style={styles.cardCategory}>{item.category}</Text>
         <Text style={styles.cardPrice}>{item.price} {item.unit}</Text>
         <Text style={styles.cardDescription} numberOfLines={2}>{item.description}</Text>
+        {item.phone && <Text style={styles.cardPhone}>Contact: {item.phone}</Text>}
       </View>
     </TouchableOpacity>
   );
@@ -116,6 +119,7 @@ export default function ListingsFeed() {
           keyExtractor={(item) => item.id}
           renderItem={renderListing}
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 20 }}
         />
       )}
     </View>
@@ -187,6 +191,11 @@ const styles = StyleSheet.create({
   cardDescription: {
     fontSize: 14,
     color: '#374151'
+  },
+  cardPhone: {
+    fontSize: 14,
+    color: '#111',
+    marginTop: 4
   },
   emptyText: {
     textAlign: 'center',

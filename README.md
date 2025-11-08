@@ -18,3 +18,10 @@ npm install @react-navigation/native-stack
 npm install --save-dev @types/react @types/react-native
 npm install @supabase/supabase-js
 npm install --save-dev @types/react @types/react-native
+npm install @react-native-picker/picker
+expo install expo-image-picker
+
+
+
+to restart expo with having commandError:
+npx expo start -c

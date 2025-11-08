@@ -16,12 +16,11 @@ export default function Login({ navigation }: any) {
     }
 
     try {
+      // Sign in using phone pseudo-email
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: phone + '@agrolink.com',
+        email: `${phone}@agrolink.com`,
         password,
       });
-
-      console.log('Supabase login response:', { data, error });
 
       if (error) throw error;
       if (!data?.user) {
@@ -40,20 +39,8 @@ export default function Login({ navigation }: any) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Login</Text>
-      <TextInput
-        placeholder="Phone Number"
-        value={phone}
-        onChangeText={setPhone}
-        style={styles.input}
-        keyboardType="phone-pad"
-      />
-      <TextInput
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-        style={styles.input}
-        secureTextEntry
-      />
+      <TextInput placeholder="Phone Number" value={phone} onChangeText={setPhone} style={styles.input} keyboardType="phone-pad" />
+      <TextInput placeholder="Password" value={password} onChangeText={setPassword} style={styles.input} secureTextEntry />
       <Button title="Login" onPress={handleLogin} />
 
       {message ? <Text style={styles.message}>{message}</Text> : null}
