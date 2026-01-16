@@ -26,3 +26,8 @@ npm install @react-navigation/native @react-navigation/native-stack @supabase/su
 npm install @react-native-async-storage/async-storage
 npm install react-native-url-polyfill
 expo install @react-native-async-storage/async-storage
+
+
+
+Note, 
+- the app will be open and when you come back it will be open until you log out 
