@@ -4,7 +4,7 @@ import { View, Text, StyleSheet } from 'react-native';
 export default function Marketplace() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Welcome to arketplace!</Text>
+      <Text style={styles.title}>Welcome to AgroLink</Text>
       <Text style={styles.subtitle}>
         Browse products, sell your items, and manage your shop from here.
       </Text>
