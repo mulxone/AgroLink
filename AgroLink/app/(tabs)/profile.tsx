@@ -1,6 +1,5 @@
 
 
-// app/(tabs)/profile.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -11,19 +10,20 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  SafeAreaView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../supabase';
 
 interface UserProfile {
-  email: string | null;
   name: string | null;
   phone: string | null;
   profile_photo: string | null;
 }
 
 export default function Profile() {
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<{ id: string; email: string } | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: '', phone: '' });
@@ -40,8 +40,8 @@ export default function Profile() {
         }
 
         const authUser = session.user;
+        setUser({ id: authUser.id, email: authUser.email! });
 
-        // Fetch profile from 'users' table
         const { data: profileData, error } = await supabase
           .from('users')
           .select('name, phone, profile_photo')
@@ -50,8 +50,7 @@ export default function Profile() {
 
         if (error) console.log('Error fetching profile:', error.message);
 
-        setUser({
-          email: authUser.email ?? null,
+        setProfile({
           name: profileData?.name ?? null,
           phone: profileData?.phone ?? null,
           profile_photo: profileData?.profile_photo ?? null,
@@ -83,12 +82,12 @@ export default function Profile() {
       const { error } = await supabase
         .from('users')
         .update({ name: form.name, phone: form.phone })
-        .eq('email', user.email);
+        .eq('id', user.id); // ✅ Update by id, not email
 
       if (error) throw error;
 
       Alert.alert('Success', 'Profile updated!');
-      setUser({ ...user, name: form.name, phone: form.phone });
+      setProfile({ ...profile!, name: form.name, phone: form.phone });
       setEditing(false);
     } catch (error: any) {
       Alert.alert('Error', error.message);
@@ -114,53 +113,55 @@ export default function Profile() {
     );
   }
 
-  if (!user) return null;
+  if (!user || !profile) return null;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>My Profile</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={styles.title}>My Profile</Text>
 
-      {editing ? (
-        <>
-          <TextInput
-            style={styles.input}
-            placeholder="Name"
-            value={form.name}
-            onChangeText={(text) => setForm({ ...form, name: text })}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Phone"
-            value={form.phone}
-            keyboardType="phone-pad"
-            onChangeText={(text) => setForm({ ...form, phone: text })}
-          />
-          <TouchableOpacity style={styles.button} onPress={updateProfile}>
-            <Text style={styles.buttonText}>Save</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, styles.cancelButton]}
-            onPress={() => setEditing(false)}
-          >
-            <Text style={styles.buttonText}>Cancel</Text>
-          </TouchableOpacity>
-        </>
-      ) : (
-        <>
-          <Text style={styles.info}>Email: {user.email}</Text>
-          <Text style={styles.info}>Name: {user.name ?? 'Not set'}</Text>
-          <Text style={styles.info}>Phone: {user.phone ?? 'Not set'}</Text>
+        {editing ? (
+          <>
+            <TextInput
+              style={styles.input}
+              placeholder="Name"
+              value={form.name}
+              onChangeText={(text) => setForm({ ...form, name: text })}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Phone"
+              value={form.phone}
+              keyboardType="phone-pad"
+              onChangeText={(text) => setForm({ ...form, phone: text })}
+            />
+            <TouchableOpacity style={styles.button} onPress={updateProfile}>
+              <Text style={styles.buttonText}>Save</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, styles.cancelButton]}
+              onPress={() => setEditing(false)}
+            >
+              <Text style={styles.buttonText}>Cancel</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <Text style={styles.info}>Email: {user.email}</Text>
+            <Text style={styles.info}>Name: {profile.name ?? 'Not set'}</Text>
+            <Text style={styles.info}>Phone: {profile.phone ?? 'Not set'}</Text>
 
-          <TouchableOpacity style={styles.button} onPress={() => setEditing(true)}>
-            <Text style={styles.buttonText}>Edit Profile</Text>
-          </TouchableOpacity>
-        </>
-      )}
+            <TouchableOpacity style={styles.button} onPress={() => setEditing(true)}>
+              <Text style={styles.buttonText}>Edit Profile</Text>
+            </TouchableOpacity>
+          </>
+        )}
 
-      <TouchableOpacity style={[styles.button, styles.logoutButton]} onPress={handleLogout}>
-        <Text style={styles.buttonText}>Logout</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <TouchableOpacity style={[styles.button, styles.logoutButton]} onPress={handleLogout}>
+          <Text style={styles.buttonText}>Logout</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
