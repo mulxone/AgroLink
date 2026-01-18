@@ -580,7 +580,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textDark,
     marginBottom: 6, // Reduced from 12px
-    lineHeight: 4, // Reduced from 20px
+    lineHeight: 18, // Reduced from 20px
     minHeight: 36, // Reduced from 40px
   },
   priceLocationRow: {
