@@ -292,7 +292,7 @@ export default function SellScreen() {
 
           <View style={styles.row}>
             <View style={[styles.inputGroup, { flex: 0.6 }]}>
-              <Text style={styles.inputLabel}>Price *</Text>
+              <Text style={styles.inputLabel}>Price for each *</Text>
               <View style={styles.priceInputContainer}>
                 <Text style={styles.currencySymbol}>K</Text>
                 <TextInput
@@ -322,7 +322,7 @@ export default function SellScreen() {
             <Text style={styles.inputLabel}>Quantity (Optional)</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g., 10 bags"
+              placeholder="How many do you have?"
               placeholderTextColor="#9ca3af"
               keyboardType="numeric"
               value={form.quantity}

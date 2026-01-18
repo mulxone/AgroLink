@@ -11,11 +11,10 @@ import {
   SafeAreaView,
   RefreshControl,
   TextInput,
-  ScrollView,
-  Dimensions,
   Animated,
   StatusBar,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { supabase } from '../../supabase';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -23,31 +22,107 @@ import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 const STATUSBAR_HEIGHT = Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 0;
-const CATEGORIES = ['All', 'Produce', 'Tools', 'Seeds', 'Fertilizers', 'Equipment', 'Vets','Livestock'];
+
+// Modern color palette
 const COLORS = {
-  primary: '#158F37',
-  secondary: '#40916c',
-  lightGreen: '#d8f3dc',
-  background: '#f8f9fa',
-  cardBg: '#ffffff',
-  textDark: '#1b4332',
-  textLight: '#52796f',
-  accent: '#f48c06',
-  border: '#e9ecef',
+  primary: '#56bdbd', // Modern blue
+  secondary: '#7C3AED', // Purple
+  accent: '#F59E0B', // Amber
+  success: '#10B981', // Emerald
+  background: '#fdfdfd',
+  cardBg: '#f3f4f7',
+  textDark: '#1E293B',
+  textLight: '#64748B',
+  border: '#E2E8F0',
+  danger: '#EF4444',
 };
+
+// Main Categories with subcategories
+const CATEGORIES = [
+  { 
+    id: 'all',
+    name: 'All',
+    icon: 'grid',
+    color: COLORS.primary
+  },
+  { 
+    id: 'farm',
+    name: 'Farm',
+    icon: 'leaf',
+    color: '#10B981',
+    subcategories: ['Produce', 'Livestock', 'Equipment', 'Seeds', 'Fertilizers', 'Tools', 'Vets']
+  },
+  { 
+    id: 'fashion',
+    name: 'Fashion',
+    icon: 'shirt',
+    color: '#EC4899',
+    subcategories: ['Clothing', 'Shoes', 'Accessories', 'Jewelry', 'Bags', 'Traditional Wear']
+  },
+  { 
+    id: 'tech',
+    name: 'Tech',
+    icon: 'phone-portrait',
+    color: '#3B82F6',
+    subcategories: ['Phones', 'Laptops', 'Electronics', 'Accessories', 'Gaming', 'Home Appliances']
+  },
+  { 
+    id: 'auto',
+    name: 'Auto',
+    icon: 'car',
+    color: '#6B7280',
+    subcategories: ['Cars', 'Parts', 'Motorcycles', 'Services', 'Accessories', 'Tires']
+  },
+  { 
+    id: 'property',
+    name: 'Property',
+    icon: 'business',
+    color: '#8B5CF6',
+    subcategories: ['Houses', 'Land','Rentals','Commercial','Furniture']
+  },
+  { 
+    id: 'services',
+    name: 'Services',
+    icon: 'construct',
+    color: '#F59E0B',
+    subcategories: ['Repairs', 'Cleaning', 'Consulting', 'Transport', 'Events', 'jobs']
+  },
+  { 
+    id: 'health',
+    name: 'Health',
+    icon: 'medical',
+    color: '#EF4444',
+    subcategories: ['Personal Care','Wellness','Beauty','Fitness','Medicines', 'Equipment',]
+  }
+];
 
 export default function Marketplace() {
   const [listings, setListings] = useState<any[]>([]);
   const [filteredListings, setFilteredListings] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sellerProfiles, setSellerProfiles] = useState<{ [key: string]: any }>({});
+  const [activeTab, setActiveTab] = useState<'grid' | 'list'>('grid');
   const router = useRouter();
   const scrollY = new Animated.Value(0);
 
-  // Load listings from Supabase
+  // Animation values
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [280 + STATUSBAR_HEIGHT, 200 + STATUSBAR_HEIGHT],
+    extrapolate: 'clamp',
+  });
+
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 50, 100],
+    outputRange: [1, 0.8, 0.6],
+    extrapolate: 'clamp',
+  });
+
+  // Load listings
   const loadListings = async () => {
     setLoading(true);
     try {
@@ -59,9 +134,8 @@ export default function Marketplace() {
 
       if (error) throw error;
       setListings(data || []);
-      setFilteredListings(data || []);
       
-      // Load seller profiles for all listings
+      // Load seller profiles
       if (data && data.length > 0) {
         const userIds = [...new Set(data.map(listing => listing.user_id))];
         await loadSellerProfiles(userIds);
@@ -74,17 +148,15 @@ export default function Marketplace() {
     }
   };
 
-  // Load seller profiles
   const loadSellerProfiles = async (userIds: string[]) => {
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('id, name, profile_photo')
+        .select('id, name, profile_photo, rating')
         .in('id', userIds);
 
       if (error) throw error;
       
-      // Create a map of user_id to profile
       const profilesMap: { [key: string]: any } = {};
       data?.forEach(profile => {
         profilesMap[profile.id] = profile;
@@ -96,13 +168,24 @@ export default function Marketplace() {
     }
   };
 
-  // Filter listings based on category and search
+  // Filter listings
   const filterListings = () => {
     let filtered = [...listings];
     
-    // Filter by category
-    if (selectedCategory !== 'All') {
-      filtered = filtered.filter(item => item.category === selectedCategory);
+    // Filter by main category
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(item => 
+        item.main_category === selectedCategory || 
+        item.category === selectedCategory
+      );
+    }
+    
+    // Filter by subcategory
+    if (selectedSubcategory) {
+      filtered = filtered.filter(item => 
+        item.subcategory === selectedSubcategory ||
+        item.category === selectedSubcategory
+      );
     }
     
     // Filter by search query
@@ -111,151 +194,208 @@ export default function Marketplace() {
       filtered = filtered.filter(item => 
         item.title.toLowerCase().includes(query) ||
         item.description?.toLowerCase().includes(query) ||
-        item.category?.toLowerCase().includes(query)
+        item.category?.toLowerCase().includes(query) ||
+        item.tags?.some((tag: string) => tag.toLowerCase().includes(query))
       );
     }
     
     setFilteredListings(filtered);
   };
 
-  // Handle refresh
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadListings();
   }, []);
 
-  // Initialize and refresh
   useEffect(() => {
     loadListings();
   }, []);
 
   useEffect(() => {
     filterListings();
-  }, [selectedCategory, searchQuery, listings]);
+  }, [selectedCategory, selectedSubcategory, searchQuery, listings]);
 
-  // Refresh listings when the screen is focused
   useFocusEffect(
     useCallback(() => {
       loadListings();
     }, [])
   );
 
-  // Calculate header height animation
-  const headerHeight = scrollY.interpolate({
-    inputRange: [0, 100],
-    outputRange: [280 + STATUSBAR_HEIGHT, 180 + STATUSBAR_HEIGHT],
-    extrapolate: 'clamp',
-  });
+  const getCategoryIcon = (categoryId: string) => {
+    const category = CATEGORIES.find(c => c.id === categoryId);
+    return category?.icon || 'grid';
+  };
 
-  const searchOpacity = scrollY.interpolate({
-    inputRange: [0, 50],
-    outputRange: [1, 0.9],
-    extrapolate: 'clamp',
-  });
+  const getCategoryColor = (categoryId: string) => {
+    const category = CATEGORIES.find(c => c.id === categoryId);
+    return category?.color || COLORS.primary;
+  };
 
-  // Render each listing card
-  const renderListingCard = ({ item, index }: { item: any; index: number }) => {
+  // Render listing card
+  const renderListingCard = ({ item }: { item: any }) => {
     const seller = sellerProfiles[item.user_id];
-    const sellerName = seller?.name || 'Local Farmer';
+    const categoryColor = getCategoryColor(item.main_category || item.category);
+    const categoryName = CATEGORIES.find(c => c.id === (item.main_category || item.category))?.name || 
+                        (item.main_category || item.category);
     
     return (
       <TouchableOpacity 
-        style={styles.card}
+        style={[styles.card, activeTab === 'list' && styles.listCard]}
         onPress={() => router.push(`/listing/${item.id}`)}
         activeOpacity={0.9}
       >
-        <View style={styles.cardImageContainer}>
+        <View style={[styles.cardImageContainer, activeTab === 'list' && styles.listImageContainer]}>
           {item.images?.[0] ? (
-            <Image source={{ uri: item.images[0] }} style={styles.cardImage} />
+            <Image source={{ uri: item.images[0] }} style={[styles.cardImage, activeTab === 'list' && styles.listImage]} />
           ) : (
-            <View style={[styles.cardImage, styles.noImage]}>
-              <Ionicons name="leaf-outline" size={40} color={COLORS.textLight} />
+            <View style={[styles.cardImage, styles.noImage, { backgroundColor: categoryColor + '20' }]}>
+              <Ionicons name={getCategoryIcon(item.main_category || item.category) as any} 
+                size={activeTab === 'grid' ? 32 : 24} 
+                color={categoryColor} 
+              />
             </View>
           )}
-          <View style={styles.categoryTag}>
-            <Text style={styles.categoryTagText}>{item.category}</Text>
-          </View>
-          {/* Love icon for favorites */}
-          <TouchableOpacity 
-            style={styles.loveIcon}
-            onPress={() => console.log('Add to favorites:', item.id)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="heart-outline" size={20} color="#fff" />
-          </TouchableOpacity>
+          {item.discount && (
+            <View style={styles.discountBadge}>
+              <Text style={styles.discountText}>-{item.discount}%</Text>
+            </View>
+          )}
         </View>
         
-        <View style={styles.cardContent}>
-          <Text style={styles.cardTitle} numberOfLines={2}>
-            {item.title}
-          </Text>
+        <View style={[styles.cardContent, activeTab === 'list' && styles.listContent]}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle} numberOfLines={activeTab === 'grid' ? 2 : 1}>
+              {item.title}
+            </Text>
+            <TouchableOpacity 
+              style={styles.loveIcon}
+              onPress={() => console.log('Add to favorites:', item.id)}
+            >
+              <Ionicons name="heart-outline" size={20} color={COLORS.textLight} />
+            </TouchableOpacity>
+          </View>
           
-          <View style={styles.priceLocationRow}>
-            <View style={styles.priceContainer}>
-              <Text style={styles.priceCurrency}>$</Text>
-              <Text style={styles.price}>{item.price}</Text>
+          {/* Category Tag Row - Replaces Description */}
+          <View style={styles.categoryTagRow}>
+            <View style={[styles.categoryTag, { backgroundColor: categoryColor }]}>
+              <Ionicons 
+                name={getCategoryIcon(item.main_category || item.category) as any} 
+                size={12} 
+                color="#FFF" 
+                style={styles.categoryTagIcon}
+              />
+              <Text style={styles.categoryTagText} numberOfLines={1}>
+                {categoryName}
+              </Text>
             </View>
             
-            <View style={styles.locationContainer}>
-              <Ionicons name="location-outline" size={14} color={COLORS.textLight} />
-              <Text style={styles.locationText} numberOfLines={1}>
-                {item.location || 'Location not specified'}
+            {/* Subcategory Tag (if exists) */}
+            {item.subcategory && (
+              <View style={[styles.subcategoryTag, { borderColor: categoryColor }]}>
+                <Text style={[styles.subcategoryTagText, { color: categoryColor }]} numberOfLines={1}>
+                  {item.subcategory}
+                </Text>
+              </View>
+            )}
+          </View>
+          
+          <View style={styles.priceContainer}>
+            <View style={styles.priceRow}>
+              <Text style={styles.priceCurrency}>K</Text>
+              <Text style={styles.price}>{item.price.toLocaleString()}</Text>
+              {item.original_price && (
+                <Text style={styles.originalPrice}>
+                  K{item.original_price.toLocaleString()}
+                </Text>
+              )}
+            </View>
+            <View style={styles.ratingContainer}>
+              <Ionicons name="star" size={12} color={COLORS.accent} />
+              <Text style={styles.ratingText}>
+                {seller?.rating || 'New'}
               </Text>
             </View>
           </View>
           
-          <View style={styles.quantityRow}>
-            <Text style={styles.quantityLabel}>
-              Quantity: {item.quantity} {item.unit}
-            </Text>
-          </View>
-          
-          <View style={styles.sellerInfo}>
-            <View style={styles.sellerAvatar}>
+          <View style={styles.footer}>
+            <View style={styles.locationContainer}>
+              <Ionicons name="location-outline" size={12} color={COLORS.textLight} />
+              <Text style={styles.locationText} numberOfLines={1}>
+                {item.location || 'Nationwide'}
+              </Text>
+            </View>
+            <View style={styles.sellerInfo}>
               {seller?.profile_photo ? (
-                <Image 
-                  source={{ uri: seller.profile_photo }} 
-                  style={styles.sellerImage} 
-                />
+                <Image source={{ uri: seller.profile_photo }} style={styles.sellerImage} />
               ) : (
-                <Ionicons name="person-circle-outline" size={16} color={COLORS.primary} />
+                <Ionicons name="person-circle-outline" size={16} color={categoryColor} />
               )}
             </View>
-            <Text style={styles.sellerText} numberOfLines={1}>
-              {sellerName}
-            </Text>
           </View>
         </View>
       </TouchableOpacity>
     );
   };
 
-  // Render category chip
-  const renderCategoryChip = ({ item }: { item: string }) => (
+  // Render category button
+  const renderCategoryButton = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={[
-        styles.categoryChip,
-        selectedCategory === item && styles.categoryChipSelected,
+        styles.categoryButton,
+        selectedCategory === item.id && { backgroundColor: item.color + '20' }
       ]}
-      onPress={() => setSelectedCategory(item)}
+      onPress={() => {
+        setSelectedCategory(item.id);
+        setSelectedSubcategory(null);
+      }}
     >
-      <Text
-        style={[
-          styles.categoryChipText,
-          selectedCategory === item && styles.categoryChipTextSelected,
-        ]}
-      >
-        {item}
+      <View style={[styles.categoryIcon, { backgroundColor: item.color }]}>
+        <Ionicons name={item.icon as any} size={20} color="#FFF" />
+      </View>
+      <Text style={[
+        styles.categoryButtonText,
+        selectedCategory === item.id && { color: item.color, fontWeight: '700' }
+      ]}>
+        {item.name}
       </Text>
     </TouchableOpacity>
   );
+
+  // Render subcategory chip
+  const renderSubcategoryChip = ({ item }: { item: string }) => {
+    const category = CATEGORIES.find(c => c.id === selectedCategory);
+    const categoryColor = category?.color || COLORS.primary;
+    
+    return (
+      <TouchableOpacity
+        style={[
+          styles.subcategoryChip,
+          selectedSubcategory === item && { backgroundColor: categoryColor, borderColor: categoryColor }
+        ]}
+        onPress={() => setSelectedSubcategory(selectedSubcategory === item ? null : item)}
+      >
+        <Text style={[
+          styles.subcategoryChipText,
+          selectedSubcategory === item && { color: '#FFF' }
+        ]}>
+          {item}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
       
-      {/* Green header background that extends to top */}
-      <Animated.View style={[styles.headerBackground, { height: headerHeight }]} />
+      {/* Animated Header Background */}
+      <Animated.View style={[
+        styles.headerBackground, 
+        { 
+          height: headerHeight,
+          opacity: headerOpacity 
+        }
+      ]} />
       
       <SafeAreaView style={styles.safeArea}>
         <Animated.ScrollView
@@ -276,22 +416,32 @@ export default function Marketplace() {
           }
           contentContainerStyle={styles.scrollContent}
         >
-          {/* Header content with proper spacing */}
+          {/* Header */}
           <View style={styles.headerContent}>
-            <View style={styles.headerInner}>
-              <Text style={styles.welcomeText}>Welcome to</Text>
-              <Text style={styles.title}>AgroLink</Text>
-              <Text style={styles.subtitle}>
-                Find local produce & services directly from farmers
-              </Text>
+            <View style={styles.headerTop}>
+              <View>
+                <Text style={styles.welcomeText}>Welcome to</Text>
+                <Text style={styles.title}>MaShop</Text>
+                <Text style={styles.subtitle}>Find your products & services across Zambia</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.cartButton}
+                onPress={() => router.push('/cart')}
+              >
+                <Ionicons name="cart-outline" size={24} color="#FFF" />
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>3</Text>
+                </View>
+              </TouchableOpacity>
             </View>
             
-            <Animated.View style={[styles.searchContainer, { opacity: searchOpacity }]}>
-              <Ionicons name="search" size={20} color={COLORS.textLight} style={styles.searchIcon} />
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={20} color={COLORS.textLight} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search for produce, tools, seeds..."
-                placeholderTextColor="#95a5a6"
+                placeholder="Search across all categories..."
+                placeholderTextColor={COLORS.textLight}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
@@ -300,43 +450,92 @@ export default function Marketplace() {
                   <Ionicons name="close-circle" size={20} color={COLORS.textLight} />
                 </TouchableOpacity>
               )}
-            </Animated.View>
+            </View>
           </View>
 
-          {/* Main content area (kept exactly as it was) */}
+          {/* Main Content */}
           <View style={styles.mainContent}>
-            {/* Categories Section */}
+            {/* Categories */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Categories</Text>
-                <TouchableOpacity onPress={() => setSelectedCategory('All')}>
-                  <Text style={styles.seeAllText}>Reset</Text>
+                <Text style={styles.sectionTitle}>Shop by Category</Text>
+                <TouchableOpacity onPress={() => {
+                  setSelectedCategory('all');
+                  setSelectedSubcategory(null);
+                }}>
+                  <Text style={styles.seeAllText}>View All</Text>
                 </TouchableOpacity>
               </View>
               <FlatList
                 data={CATEGORIES}
-                renderItem={renderCategoryChip}
-                keyExtractor={(item) => item}
+                renderItem={renderCategoryButton}
+                keyExtractor={(item) => item.id}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.categoriesList}
               />
             </View>
 
-            {/* Listings Section */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
+            {/* Subcategories (if selected) */}
+            {selectedCategory !== 'all' && CATEGORIES.find(c => c.id === selectedCategory)?.subcategories && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Subcategories</Text>
+                  <TouchableOpacity onPress={() => setSelectedSubcategory(null)}>
+                    <Text style={styles.seeAllText}>Clear</Text>
+                  </TouchableOpacity>
+                </View>
+                <FlatList
+                  data={CATEGORIES.find(c => c.id === selectedCategory)?.subcategories || []}
+                  renderItem={renderSubcategoryChip}
+                  keyExtractor={(item) => item}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.subcategoriesList}
+                />
+              </View>
+            )}
+
+            {/* Listings Header */}
+            <View style={styles.listingsHeader}>
+              <View>
                 <Text style={styles.sectionTitle}>
-                  {selectedCategory === 'All' ? 'Latest Listings' : selectedCategory}
+                  {selectedCategory === 'all' ? 'All Products' : 
+                   CATEGORIES.find(c => c.id === selectedCategory)?.name}
                 </Text>
                 <Text style={styles.resultsCount}>
-                  {filteredListings.length} items
+                  {filteredListings.length} products found
                 </Text>
               </View>
+              <View style={styles.viewToggle}>
+                <TouchableOpacity 
+                  style={[styles.toggleButton, activeTab === 'grid' && styles.toggleButtonActive]}
+                  onPress={() => setActiveTab('grid')}
+                >
+                  <Ionicons 
+                    name="grid" 
+                    size={20} 
+                    color={activeTab === 'grid' ? COLORS.primary : COLORS.textLight} 
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.toggleButton, activeTab === 'list' && styles.toggleButtonActive]}
+                  onPress={() => setActiveTab('list')}
+                >
+                  <Ionicons 
+                    name="list" 
+                    size={20} 
+                    color={activeTab === 'list' ? COLORS.primary : COLORS.textLight} 
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
 
-              {loading ? (
-                <View style={styles.loadingContainer}>
-                  <View style={styles.loadingCard}>
+            {/* Listings */}
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                {[1, 2, 3, 4].map((i) => (
+                  <View key={i} style={[styles.loadingCard, activeTab === 'list' && styles.listCard]}>
                     <View style={[styles.cardImage, styles.loadingImage]} />
                     <View style={styles.loadingContent}>
                       <View style={styles.loadingLine} />
@@ -344,45 +543,47 @@ export default function Marketplace() {
                       <View style={[styles.loadingLine, { width: '50%' }]} />
                     </View>
                   </View>
-                  <View style={styles.loadingCard}>
-                    <View style={[styles.cardImage, styles.loadingImage]} />
-                    <View style={styles.loadingContent}>
-                      <View style={styles.loadingLine} />
-                      <View style={[styles.loadingLine, { width: '70%' }]} />
-                      <View style={[styles.loadingLine, { width: '50%' }]} />
-                    </View>
-                  </View>
-                </View>
-              ) : filteredListings.length > 0 ? (
+                ))}
+              </View>
+            ) : filteredListings.length > 0 ? (
+              activeTab === 'grid' ? (
                 <View style={styles.listingsGrid}>
-                  {filteredListings.map((item, index) => (
+                  {filteredListings.map((item) => (
                     <View key={item.id} style={styles.gridItem}>
-                      {renderListingCard({ item, index })}
+                      {renderListingCard({ item })}
                     </View>
                   ))}
                 </View>
               ) : (
-                <View style={styles.emptyState}>
-                  <Ionicons name="leaf-outline" size={60} color={COLORS.border} />
-                  <Text style={styles.emptyStateTitle}>
-                    {searchQuery ? 'No matching results' : 'No listings yet'}
-                  </Text>
-                  <Text style={styles.emptyStateText}>
-                    {searchQuery 
-                      ? 'Try different keywords or categories'
-                      : 'Be the first to list your farm products!'
-                    }
-                  </Text>
-                  <TouchableOpacity 
-                    style={styles.sellButton}
-                    onPress={() => router.push('/sell')}
-                  >
-                    <Ionicons name="add-circle-outline" size={20} color="#fff" />
-                    <Text style={styles.sellButtonText}>Sell Your Products</Text>
-                  </TouchableOpacity>
+                <View style={styles.listingsList}>
+                  {filteredListings.map((item) => (
+                    <View key={item.id} style={styles.listItem}>
+                      {renderListingCard({ item })}
+                    </View>
+                  ))}
                 </View>
-              )}
-            </View>
+              )
+            ) : (
+              <View style={styles.emptyState}>
+                <Ionicons name="search-outline" size={80} color={COLORS.border} />
+                <Text style={styles.emptyStateTitle}>
+                  {searchQuery ? 'No results found' : 'No listings yet'}
+                </Text>
+                <Text style={styles.emptyStateText}>
+                  {searchQuery 
+                    ? 'Try different keywords or categories'
+                    : 'Be the first to list your products!'
+                  }
+                </Text>
+                <TouchableOpacity 
+                  style={styles.sellButton}
+                  onPress={() => router.push('/sell')}
+                >
+                  <Ionicons name="add-circle-outline" size={20} color="#fff" />
+                  <Text style={styles.sellButtonText}>List Your Product</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </Animated.ScrollView>
       </SafeAreaView>
@@ -404,8 +605,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: COLORS.primary,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
   scrollView: {
     flex: 1,
@@ -415,45 +616,65 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     paddingHorizontal: 20,
-    paddingTop: STATUSBAR_HEIGHT + 0,
+    paddingTop: STATUSBAR_HEIGHT + 10,
+    paddingBottom: 20,
   },
-  headerInner: {
-    marginTop: 0,
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 20,
   },
   welcomeText: {
     fontSize: 14,
-    color: COLORS.lightGreen,
+    color: 'rgba(255, 255, 255, 0.9)',
     fontWeight: '500',
     marginBottom: 4,
   },
   title: {
     fontSize: 32,
     fontWeight: '800',
-    color: '#fff',
-    marginBottom: 8,
+    color: '#FFF',
+    marginBottom: 6,
     letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 15,
-    color: COLORS.lightGreen,
-    marginBottom: 24,
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  cartButton: {
+    padding: 10,
+    position: 'relative',
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    backgroundColor: COLORS.danger,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cartBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#FFF',
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginTop: 10,
+    paddingVertical: 14,
+    gap: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  searchIcon: {
-    marginRight: 12,
+    shadowRadius: 12,
+    elevation: 4,
   },
   searchInput: {
     flex: 1,
@@ -462,15 +683,14 @@ const styles = StyleSheet.create({
   },
   mainContent: {
     backgroundColor: COLORS.background,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: 20,
     paddingTop: 24,
-    marginTop: 20,
     minHeight: '100%',
   },
   section: {
-    marginBottom: 28,
+    marginBottom: 24,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -479,7 +699,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: COLORS.textDark,
   },
@@ -488,33 +708,71 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: '600',
   },
-  resultsCount: {
-    fontSize: 14,
-    color: COLORS.textLight,
-  },
   categoriesList: {
     paddingRight: 20,
+    gap: 16,
   },
-  categoryChip: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+  categoryButton: {
+    alignItems: 'center',
+    width: 70,
+    padding: 8,
+    borderRadius: 16,
+  },
+  categoryIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  categoryButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textDark,
+    textAlign: 'center',
+  },
+  subcategoriesList: {
+    paddingRight: 20,
+    gap: 8,
+  },
+  subcategoryChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#fff',
-    marginRight: 10,
+    backgroundColor: '#FFF',
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  categoryChipSelected: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  categoryChipText: {
-    fontSize: 14,
-    fontWeight: '600',
+  subcategoryChipText: {
+    fontSize: 13,
+    fontWeight: '500',
     color: COLORS.textLight,
   },
-  categoryChipTextSelected: {
-    color: '#fff',
+  listingsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  resultsCount: {
+    fontSize: 13,
+    color: COLORS.textLight,
+    marginTop: 2,
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF',
+    borderRadius: 8,
+    padding: 4,
+    gap: 4,
+  },
+  toggleButton: {
+    padding: 8,
+    borderRadius: 6,
+  },
+  toggleButtonActive: {
+    backgroundColor: COLORS.primary + '10',
   },
   listingsGrid: {
     flexDirection: 'row',
@@ -523,6 +781,12 @@ const styles = StyleSheet.create({
   },
   gridItem: {
     width: (width - 40 - 12) / 2,
+    marginBottom: 16,
+  },
+  listingsList: {
+    gap: 16,
+  },
+  listItem: {
     marginBottom: 16,
   },
   card: {
@@ -535,122 +799,166 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
+  listCard: {
+    flexDirection: 'row',
+    height: 140,
+  },
   cardImageContainer: {
     position: 'relative',
+  },
+  listImageContainer: {
+    width: 140,
   },
   cardImage: {
     width: '100%',
     height: 120,
-    backgroundColor: COLORS.lightGreen,
+  },
+  listImage: {
+    height: '100%',
   },
   noImage: {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  categoryTag: {
+  discountBadge: {
     position: 'absolute',
-    top: 10,
-    left: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  categoryTagText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  loveIcon: {
-    position: 'absolute',
-    top: 10,
+    bottom: 10,
     right: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: COLORS.danger,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  discountText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFF',
   },
   cardContent: {
     padding: 14,
+  },
+  listContent: {
+    flex: 1,
+    paddingVertical: 14,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
   },
   cardTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: COLORS.textDark,
-    marginBottom: 6, // Reduced from 12px
-    lineHeight: 18, // Reduced from 20px
-    minHeight: 36, // Reduced from 40px
+    flex: 1,
+    marginRight: 8,
   },
-  priceLocationRow: {
+  loveIcon: {
+    padding: 2,
+  },
+  categoryTagRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4, // Reduced from 8px
+    gap: 6,
+    marginBottom: 10,
+    flexWrap: 'wrap',
+  },
+  categoryTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    maxWidth: '70%',
+  },
+  categoryTagIcon: {
+    marginRight: 4,
+  },
+  categoryTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFF',
+    textTransform: 'capitalize',
+  },
+  subcategoryTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    backgroundColor: '#FFF',
+    maxWidth: '30%',
+  },
+  subcategoryTagText: {
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'capitalize',
   },
   priceContainer: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  priceRow: {
+    flexDirection: 'row',
     alignItems: 'baseline',
-    flex: 1,
   },
   priceCurrency: {
     fontSize: 14,
     fontWeight: '700',
     color: COLORS.primary,
+    marginRight: 2,
   },
   price: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: COLORS.textDark,
+    marginRight: 8,
+  },
+  originalPrice: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    textDecorationLine: 'line-through',
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  ratingText: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    fontWeight: '600',
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    justifyContent: 'flex-end',
+    gap: 4,
   },
   locationText: {
     fontSize: 12,
     color: COLORS.textLight,
-    marginLeft: 4,
-    flexShrink: 1,
-  },
-  quantityRow: {
-    marginBottom: 10, // Slightly reduced
-  },
-  quantityLabel: {
-    fontSize: 13,
-    color: COLORS.textLight,
-    fontWeight: '500',
+    flex: 1,
   },
   sellerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: 10, // Slightly reduced
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  sellerAvatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: COLORS.lightGreen,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 6, // Reduced from 8px
-    overflow: 'hidden',
   },
   sellerImage: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-  },
-  sellerText: {
-    fontSize: 11,
-    color: COLORS.textLight,
-    fontWeight: '500',
-    flex: 1,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
   },
   loadingContainer: {
     flexDirection: 'row',
@@ -658,10 +966,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   loadingCard: {
-    width: (width - 40 - 12) / 2,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 16,
+    overflow: 'hidden',
     marginBottom: 16,
+    width: (width - 40 - 12) / 2,
   },
   loadingImage: {
+    height: 120,
     backgroundColor: COLORS.border,
   },
   loadingContent: {
@@ -679,27 +991,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   emptyStateTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: COLORS.textDark,
-    marginTop: 16,
+    marginTop: 20,
     marginBottom: 8,
   },
   emptyStateText: {
-    fontSize: 14,
+    fontSize: 15,
     color: COLORS.textLight,
     textAlign: 'center',
     marginBottom: 24,
-    lineHeight: 20,
+    lineHeight: 22,
   },
   sellButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.accent,
+    backgroundColor: COLORS.primary,
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 12,
-    gap: 8,
+    gap: 10,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   sellButtonText: {
     fontSize: 15,
