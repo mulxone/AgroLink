@@ -26,6 +26,14 @@ npm install @react-navigation/native @react-navigation/native-stack @supabase/su
 npm install @react-native-async-storage/async-storage
 npm install react-native-url-polyfill
 expo install @react-native-async-storage/async-storage
+npx expo install expo-image-picker
+npm install base64-arraybuffer
+
+npx expo install expo-image-picker
+npx expo install expo-file-system
+npm install base64-arraybuffer
+expo install react-native-maps
+
 
 
 
